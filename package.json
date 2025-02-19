@@ -1,0 +1,45 @@
+{
+  "name": "comed-bills",
+  "description": "A Node.js library to bulk download utility bills from the ComEd (Commonwealth Edison Company) customer portal.",
+  "license": "MIT",
+  "homepage": "https://github.com/wesleyzloza/comed-bills#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wesleyzloza/comed-bills.git"
+  },
+  "bugs": {
+    "url": "https://github.com/wesleyzloza/comed-bills/issues"
+  },
+  "author": {
+    "name": "Wesley Zloza",
+    "email": "mortem-web@pm.me",
+    "url": "https://mastodon.social/@mortem"
+  },
+  "keywords": [
+    "downloader",
+    "utility-bills",
+    "electricity",
+    "comed",
+    "commonwealth-edison-company"
+  ],
+  "version": "1.0.0",
+  "scripts": {},
+  "cpu": [
+    "x64"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "exports": {
+    ".": "./index.mjs",
+    "./dist/*": "./src/*.mjs",
+    "./dist/*.mjs": "./src/*.mjs",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@types/node": "^22.13.0",
+    "chalk": "5.3",
+    "date-fns": "^4.1.0",
+    "puppeteer": "^23.0.0"
+  }
+}
