@@ -3,6 +3,11 @@
 A Node.js library to bulk download utility bills from the
 [ComEd web portal](https://secure.comed.com/accounts/login).
 
+<img
+  alt="Down arrow colors matching branding of the Commonwealth Edison Company"
+  src="./assets/icon.svg"
+  height="128" width="128" style="margin: 0 auto;">
+
 ## Background
 
 Utility companies often do not provide a way to bulk download bills/invoices.
