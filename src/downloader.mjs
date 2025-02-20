@@ -5,7 +5,7 @@ import chalk from 'chalk';
 import fsp from 'fs/promises';
 import path from 'path';
 import puppeteer from 'puppeteer';
-import { BASE_URL, LOGIN_URL } from './constants.mjs';
+import { API_URL, BASE_URL, LOGIN_URL } from './constants.mjs';
 import { format } from 'date-fns';
 import { AuthenticationError } from './auth-error.mjs';
 import { TemporaryStorage } from './storage.mjs';
@@ -18,13 +18,6 @@ import { TemporaryStorage } from './storage.mjs';
  */
 export class ComEdBillDownloader {
   /**
-   * ComEd API base URL.
-   * @type {string}
-   * @private
-   */
-  static _baseURL = 'https://secure.comed.com/';
-
-  /**
    * Authentication status.
    * @description Specifies whether the user has successfully authenticated.
    * @type {boolean}
@@ -32,12 +25,16 @@ export class ComEdBillDownloader {
   #isAuthenticated = false;
 
   /**
+   * The bearer token associated with the active session.
+   * @type {string | undefined}
+   */
+  #bearerToken = undefined;
+
+  /**
    * The active account number/context.
    * @type {string | undefined}
    */
   #activeAccount = undefined;
-
-  #bearerToken = undefined;
 
   /**
    * Session cookies.
@@ -71,6 +68,7 @@ export class ComEdBillDownloader {
     if (cookies && !ComEdBillDownloader.hasSessionExpired(cookies)) {
       this.#sessionCookies = cookies;
       this.#isAuthenticated = true;
+      this.#bearerToken = await this.getBearerToken();
       return;
     };
 
@@ -165,14 +163,19 @@ export class ComEdBillDownloader {
     return storage.set('cookies', cookieJSON);
   }
 
+  /**
+   * Gets the JSON web token / bearer token for the logged in user. 
+   * @private
+   */
   async getBearerToken() {
     if (!this.#isAuthenticated) throw new AuthenticationError('Operation can only be performed after authentication.');
-    const url = 'https://secure.comed.com/api/services/myaccountservice.svc/getsession';
+    const url = `${BASE_URL}api/services/myaccountservice.svc/getsession`;
     const response = await fetch(url, {
       headers: { cookie: this._sessionCookiesHttpString },
       method: 'GET'
     });
     
+    if (response.ok === false) throw new Error('Failed to get bearer token.'); 
     const result = await response.json();
     return result.token;
   }
@@ -202,6 +205,8 @@ export class ComEdBillDownloader {
       mode: 'cors'
     });
 
+    if (response.ok === false) throw new Error('Failed to activate the specified account.');
+
     this.#activeAccount = accountNumber;
   }
 
@@ -217,7 +222,7 @@ export class ComEdBillDownloader {
     const dateFormatString = 'yyyy-MM-dd';
     const start = format(from, dateFormatString);
     const end = format(to, dateFormatString);
-    const url = `https://secure.comed.com/.euapi/mobile/custom/auth/accounts/${this.#activeAccount}/billing/history`;
+    const url = `${API_URL}${this.#activeAccount}/billing/history`;
     const body = JSON.stringify({
       start_date: start,
       end_date: end,
@@ -236,7 +241,7 @@ export class ComEdBillDownloader {
       method: 'POST'
     });
 
-    if (response.ok === false) throw new Error('Failed to get bearer token.'); 
+    if (response.ok === false) throw new Error('Unable to gather bills for the specified dates.');
 
     /**
      * @type {import('./typedefs.mjs').ComEdResponse}
@@ -254,13 +259,13 @@ export class ComEdBillDownloader {
    * Downloads the specified bill.
    * @param {import('./typedefs.mjs').ComEdBillDetails} bill Bill details.
    * @param {string} saveDirectory Save Directory
+   * @private
    */
   async downloadBill(bill, saveDirectory) {
     const accountNumber = this.#activeAccount;
     const billDate = new Date(bill.date);
-    const dateFormatString = 'yyyy-MM-dd';
-    const foo = format(billDate, dateFormatString);
-    const url = `https://secure.comed.com/.euapi/mobile/custom/auth/accounts/${accountNumber}/billing/${foo}/pdf`;
+    const billDateFormatted = format(billDate, 'yyyy-MM-dd');
+    const url = `${API_URL}${accountNumber}/billing/${billDateFormatted}/pdf`;
     const response = await fetch(url, { 
       headers: {
         Authorization: `Bearer ${this.#bearerToken}`,
@@ -270,10 +275,19 @@ export class ComEdBillDownloader {
       method: 'GET'
     });
 
+    if (response.ok === false) {
+      throw new Error(
+        'Failed to download bill. ' +
+        'The associated HTTP request was unsuccessful.', 
+        { cause: response }
+      );
+    }
+
     const result = await response.json();
-    const base64 = result.data.billImageData;
-    const filePath = path.resolve(saveDirectory, `${foo}.pdf`);
-    await fsp.writeFile(filePath, base64, { encoding: 'base64' });
+    const base64Pdf = result.data.billImageData;
+    const fileName = `${accountNumber}-${billDateFormatted}.pdf`;
+    const filePath = path.resolve(saveDirectory, fileName);
+    await fsp.writeFile(filePath, base64Pdf, { encoding: 'base64' });
   }
 
   /**
