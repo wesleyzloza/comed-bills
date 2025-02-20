@@ -6,7 +6,7 @@ import fsp from 'fs/promises';
 import path from 'path';
 import puppeteer from 'puppeteer';
 import { API_URL, BASE_URL, LOGIN_URL } from './constants.mjs';
-import { format } from 'date-fns';
+import { format, sub } from 'date-fns';
 import { AuthenticationError } from './auth-error.mjs';
 import { TemporaryStorage } from './storage.mjs';
 
@@ -291,16 +291,16 @@ export class ComEdBillDownloader {
   }
 
   /**
-   * Performs a bulk download of bills within a provided date range.
+   * Performs a bulk download of bills from the last 24 months.
    * @param {string} accountNumber Account Number
-   * @param {Date} to Start Date
-   * @param {Date} from End Date
    * @param {string} saveDirectory Save Directory
    * @returns {Promise<void>}
    */
-  async bulkDownload(accountNumber, to, from, saveDirectory) {
+  async bulkDownload(accountNumber, saveDirectory) {
     if (this.#isAuthenticated === false) throw new AuthenticationError('Operation can only be performed after authentication.');
     if (this.#activeAccount !== accountNumber) await this.activateAccount(accountNumber);
+    const to = new Date();
+    const from = sub(to, { months: 12 });
     const bills = await this.getBills(to, from);
     for (const bill of bills) {
       const billDate = new Date(bill.date);

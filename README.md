@@ -5,36 +5,33 @@ A Node.js library to bulk download utility bills from the
 
 ## Background
 
-Most utility companies don't provide a way to bulk download utility bills and
-will limit the billing history to the last two years. This limit is often
-restricted by the user interface and can be bypassed by querying the server
-directly. This was the case for
-[ComEd (Commonwealth Edison Company)](https://www.comed.com/)
+Utility companies often do not provide a way to bulk download bills/invoices.
+This library allows users to download the utility bills that have been issued by
+the [ComEd (Commonwealth Edison Company)](https://www.comed.com/) within the
+last 24 months. **Unfortunately ComEd does not appear to provide a method of
+gathering utility beyond 24 months.**
 
 ## Usage
 
-The `NicorGasBillDownloader` class contains the following methods to for
-requesting and saving a bill for the Southern Gas Company customer portal:  
+The `ComEdBillDownloader` class contains the following methods to for
+requesting and saving a bill from the Commonwealth Edison Company customer
+portal:  
 
-- `authenticate()` - Authenticates and performs the necessary server operations to download bills.
-- `tryBulkDownload()` - Attempts to locate and download all bills within in range of dates.
-- `tryDownloadingBill()` - Attempts to locate and download a bill for a specific month/year.
-- `requestBill()` - Requests a bill for given issue date.
+- `authenticate()` - Authenticates and performs the necessary server operations
+  to download bills.
+- `tryBulkDownload()` - Attempts to download all bills from the last 24 months.
 
 ```javascript
-import { sub } from 'date-fns';
-import { NicorGasBillDownloader } from 'nicor-bills';
+import { ComEdBillDownloader } from 'comed-bills';
 
 const ACCOUNT_NUMBER = '12349780000';
 const USERNAME = 'JohnDoe';
 const PASSWORD = 'FooBaBaz123';
 
-const to = new Date();
-const from = sub(to, { months: 2 });
 const saveDirectory = import.meta.dirname;
-const billDownloader = new NicorGasBillDownloader(ACCOUNT_NUMBER);
-await billDownloader.authenticate(USERNAME, PASSWORD);
-await billDownloader.tryBulkDownload(from, to, saveDirectory);
+const downloader = new ComEdBillDownloader();
+await downloader.authenticate(USERNAME, PASSWORD);
+await downloader.bulkDownload(ACCOUNT_NUMBER, saveDirectory);
 ```
 
 ## System Requirements
