@@ -27,16 +27,21 @@ portal:
 - `tryBulkDownload()` - Attempts to download all bills from the last 24 months.
 
 ```javascript
+import { sub } from 'date-fns';
 import { ComEdBillDownloader } from 'comed-bills';
 
+// Account details:
 const ACCOUNT_NUMBER = '12349780000';
 const USERNAME = 'JohnDoe';
 const PASSWORD = 'FooBaBaz123';
 
+// Download bills from the last 12 months:
+const to = new Date();
+const from = sub(to, { months: 12 });
 const saveDirectory = import.meta.dirname;
 const downloader = new ComEdBillDownloader();
 await downloader.authenticate(USERNAME, PASSWORD);
-await downloader.bulkDownload(ACCOUNT_NUMBER, saveDirectory);
+await downloader.bulkDownload(ACCOUNT_NUMBER, from, to, saveDirectory);
 ```
 
 ## System Requirements
