@@ -6,7 +6,7 @@ import fsp from 'fs/promises';
 import path from 'path';
 import puppeteer from 'puppeteer';
 import { API_URL, BASE_URL, LOGIN_URL } from './constants.mjs';
-import { format, sub } from 'date-fns';
+import { format, formatISO, sub } from 'date-fns';
 import { AuthenticationError } from './auth-error.mjs';
 import { TemporaryStorage } from './storage.mjs';
 
@@ -203,21 +203,25 @@ export class ComEdBillDownloader {
   }
 
   /**
-   * Gets the list of bills issued between the provided date range.
-   * @param {Date} to Start date.
-   * @param {Date} from End date.
+   * Gets the bills issued within the last 24 months. 
+   * @description Gets the bills issues within the last 24 months - this date
+   * range is a constraint imposed by ComEd. In fact, the server essentially
+   * ignores the start and end dates specified in the HTTP request.
    * @returns {Promise<import('./typedefs.mjs').ComEdBillDetails[]>}
+   * @private
    */
-  async getBills(to, from) {
+  async getBills() {
     if (!this.#isAuthenticated) throw new AuthenticationError('Operation can only be performed after authentication.');
 
-    const dateFormatString = 'yyyy-MM-dd';
-    const start = format(from, dateFormatString);
-    const end = format(to, dateFormatString);
+    const today = new Date();
+    const limit = sub(today, { months: 24 });
+    const startIsoDate = formatISO(limit, { representation: 'date' });
+    const endIsoDate = formatISO(today, { representation: 'date' });
+
     const url = `${API_URL}${this.#activeAccount}/billing/history`;
     const body = JSON.stringify({
-      start_date: start,
-      end_date: end,
+      start_date: startIsoDate,
+      end_date: endIsoDate,
       statement_type: '01',
       biller_id: 'ComEdRegistered'
     });
@@ -233,7 +237,7 @@ export class ComEdBillDownloader {
       method: 'POST'
     });
 
-    if (response.ok === false) throw new Error('Unable to gather bills for the specified dates.');
+    if (response.ok === false) throw new Error('Unable to gather the bills issued in the last 24 months.', { cause: response });
 
     /**
      * @type {import('./typedefs.mjs').ComEdResponse}
@@ -283,18 +287,44 @@ export class ComEdBillDownloader {
   }
 
   /**
-   * Performs a bulk download of bills from the last 24 months.
+   * Performs a bulk download of bills within a provided date range.
    * @param {string} accountNumber Account Number
+   * @param {Date} from Start Date. This date must be within the last 24 months.
+   * @param {Date} to End Date. This date must be after the `from` argument but
+   * cannot exist in the future.
    * @param {string} saveDirectory Save Directory
    * @returns {Promise<void>}
+   * @throws Throws an error if the provided date range is not within the last
+   * 24 months.
    */
-  async bulkDownload(accountNumber, saveDirectory) {
+  async bulkDownload(accountNumber, from, to, saveDirectory) {
     if (this.#isAuthenticated === false) throw new AuthenticationError('Operation can only be performed after authentication.');
     if (this.#activeAccount !== accountNumber) await this.activateAccount(accountNumber);
-    const to = new Date();
-    const from = sub(to, { months: 12 });
-    const bills = await this.getBills(to, from);
-    for (const bill of bills) {
+    
+    const systemUpperTimeLimit = new Date().valueOf();
+    const systemLowerTimeLimit = sub(systemUpperTimeLimit, { months: 12 }).valueOf();
+    const userUpperTimeLimit = to.valueOf();
+    const userLowerTimeLimit = from.valueOf();
+
+    if (userLowerTimeLimit < systemLowerTimeLimit) {
+      throw new Error('Invalid date range provided. The "from" date must be within the last 24 months.');
+    }
+
+    if (userUpperTimeLimit > systemUpperTimeLimit) {
+      throw new Error('Invalid date range provided. The "to" date cannot be in the future.');
+    }
+
+    if (userLowerTimeLimit > userUpperTimeLimit) {
+      throw new Error('Invalid date range provided. The "form" date must be before the "to" date.');
+    }
+
+    const bills = await this.getBills();
+    const billsInTimeRange = bills.filter(bill => {
+      const time = new Date(bill.date).valueOf();
+      return time >= userLowerTimeLimit && time <= userUpperTimeLimit;
+    });
+
+    for (const bill of billsInTimeRange) {
       const billDate = new Date(bill.date);
       const billDateFormat = 'MM/yyyy';
       console.log(chalk.blue(`Downloading bill for ${format(billDate, billDateFormat)}`));
