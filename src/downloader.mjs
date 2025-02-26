@@ -65,11 +65,18 @@ export class ComEdBillDownloader {
     // in the temporary storage directory. If the session is still valid, then
     // user is authenticated.
     const cookies = await ComEdBillDownloader.getCookies(username);
-    if (cookies && !ComEdBillDownloader.hasSessionExpired(cookies)) {
-      this.#sessionCookies = cookies;
-      this.#isAuthenticated = true;
-      this.#bearerToken = await this.getBearerToken();
-      return;
+    if (cookies) {
+      try {
+        this.#bearerToken = await this.getBearerToken();
+        this.#sessionCookies = cookies;
+        this.#isAuthenticated = true;
+        return;
+      } catch {
+        /* Explicitly ignoring the error.
+         * If an error is thrown while trying to get the bearer token then it is
+         * likely that the user's session has expired and must re-authenticate.
+         */
+      }
     };
 
     // Step 2: The user does not have an active session and therefore must
@@ -117,21 +124,6 @@ export class ComEdBillDownloader {
   }
 
   /**
-   * Determines whether the cookies associated with a ComEd session have expired.
-   * @param {import('puppeteer').Cookie[]} cookies An array of cookies.
-   * @return {boolean} Returns a boolean that specifies whether the provided
-   * session cookies are expired.
-   * @private
-   */
-  static hasSessionExpired(cookies) {
-    const domains = new Set(['secure.comed.com', '.secure.comed.com']);
-    const now = Date.now();
-    return cookies
-      .filter(cookie => domains.has(cookie.domain) && cookie.session === false)
-      .every(cookie => now <= cookie.expires);
-  }
-
-  /**
    * Gets the cookies, if any, the have been persisted in the temporary storage
    * directory for the provided user.
    * @param {string} username Username
@@ -175,7 +167,7 @@ export class ComEdBillDownloader {
       method: 'GET'
     });
     
-    if (response.ok === false) throw new Error('Failed to get bearer token.'); 
+    if (response.ok === false) throw new Error('Failed to get bearer token.', { cause: response }); 
     const result = await response.json();
     return result.token;
   }
